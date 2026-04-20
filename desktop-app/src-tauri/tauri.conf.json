@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "desktop-app",
+  "productName": "LinkDesk",
   "version": "0.1.0",
   "identifier": "com.linkdesk.app",
   "build": {
@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "desktop-app",
-        "width": 800,
-        "height": 600
+        "title": "LinkDesk",
+        "width": 900,
+        "height": 600,
+        "minWidth": 900,
+        "minHeight": 600
       }
     ],
     "security": {
