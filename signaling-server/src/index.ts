@@ -7,7 +7,7 @@ import { createLogger } from "./lib/logger";
 async function main(): Promise<void> {
   const env = loadEnv(process.env);
   const logger = createLogger(env);
-  const app = await buildServer({ env });
+  const { app } = await buildServer({ env });
 
   try {
     await app.listen({ port: env.PORT, host: "0.0.0.0" });

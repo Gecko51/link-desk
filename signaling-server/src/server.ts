@@ -10,32 +10,29 @@ export interface BuildServerOptions {
   env: Env;
 }
 
+export interface BuildServerResult {
+  app: FastifyInstance;
+  sessions: SessionManager;
+}
+
 // Builds (but does not start) a Fastify server wired with:
 //  - /health            GET liveness
 //  - /signaling         WebSocket upgrade
-// The returned instance also exposes `sessions` for tests.
-export async function buildServer(
-  opts: BuildServerOptions,
-): Promise<FastifyInstance & { sessions: SessionManager }> {
+// Returns both the app and the session manager so tests can inspect server state.
+export async function buildServer(opts: BuildServerOptions): Promise<BuildServerResult> {
   const logger = createLogger(opts.env);
   const sessions = new SessionManager();
 
-  // Disable Fastify's built-in logger — we pass our own Pino instance (DEV-RULES §3).
+  // Disable Fastify's built-in logger - we pass our own Pino instance (DEV-RULES §3).
   const app = Fastify({ logger: false });
 
   await app.register(websocket);
   await app.register(healthRoute);
 
-  // Context7 confirmed: @fastify/websocket v10 handler receives (socket, req)
-  // where `socket` is the raw ws.WebSocket — no `.socket` indirection needed.
+  // @fastify/websocket v10 handler receives (socket, req) where `socket` is the raw ws.WebSocket.
   app.get("/signaling", { websocket: true }, (socket, _req) => {
     handleConnection(socket, { manager: sessions, logger });
   });
 
-  // Expose sessions for integration tests (Task 9).
-  // Double-cast via `unknown` is required here: TypeScript cannot widen `app`
-  // directly to the intersection because `sessions` is not part of FastifyInstance.
-  // This pattern is explicitly allowed by DEV-RULES for augmented return types.
-  (app as unknown as { sessions: SessionManager }).sessions = sessions;
-  return app as unknown as FastifyInstance & { sessions: SessionManager };
+  return { app, sessions };
 }
