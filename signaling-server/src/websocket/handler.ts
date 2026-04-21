@@ -2,7 +2,6 @@ import type { WebSocket } from "ws";
 import type { Logger } from "pino";
 import type { SessionManager } from "./session-manager";
 import { routeMessage } from "./message-router";
-import { maskPin } from "@/lib/logger";
 
 // Max silence before forced disconnect (DEV-RULES §7 — 30 s ping + 10 s timeout + slack).
 const HEARTBEAT_TIMEOUT_MS = 45_000;
@@ -16,73 +15,73 @@ interface ConnectionOptions {
   logger: Logger;
 }
 
-// Wires all lifecycle events (message / close / error) on a freshly accepted WebSocket.
-// A closure tracks machineId so cleanup on disconnect requires no outbound message parsing.
-// A periodic timer enforces the heartbeat contract: silent clients are force-closed.
-export function handleConnection(socket: WebSocket, opts: ConnectionOptions): void {
-  // Each connection gets its own child logger with a unique socket_id for tracing.
-  let machineId: string | undefined;
-  const log = opts.logger.child({ socket_id: crypto.randomUUID() });
+// Shared mutable state between the orchestrator and its helpers.
+// Replaces the closure variable so each helper can observe machineId updates.
+interface ConnectionState {
+  machineId?: string;
+}
 
-  log.info("client connected");
+// Coerces any inbound ws v8 payload (Buffer / string / ArrayBuffer) to a UTF-8 string.
+function toText(raw: unknown): string {
+  if (Buffer.isBuffer(raw)) return raw.toString("utf-8");
+  if (typeof raw === "string") return raw;
+  return Buffer.from(raw as ArrayBuffer).toString("utf-8");
+}
 
-  // --- Inbound message handler ---
+// Attaches the message listener: routes the message, then scans the payload
+// to resolve machineId (on register) and emit a pin-update log.
+function attachMessageListener(
+  socket: WebSocket,
+  state: ConnectionState,
+  opts: ConnectionOptions,
+  log: Logger,
+): void {
   socket.on("message", (raw) => {
-    // ws v8 delivers Buffer | string | ArrayBuffer; coerce to UTF-8 string.
-    const text = Buffer.isBuffer(raw)
-      ? raw.toString("utf-8")
-      : typeof raw === "string"
-        ? raw
-        : Buffer.from(raw as ArrayBuffer).toString("utf-8");
+    const text = toText(raw);
 
-    // Delegate routing and error acks to the pure routeMessage function.
-    routeMessage(text, { manager: opts.manager, socket, machineId });
+    // Delegate routing + error acks to the pure routeMessage function.
+    routeMessage(text, { manager: opts.manager, socket, machineId: state.machineId });
 
-    // Inspect the inbound payload to resolve machineId for subsequent lifecycle events.
-    // Errors are swallowed here because routeMessage already sent an error ack to the client.
+    // Inspect the payload to resolve machineId for subsequent lifecycle events.
+    // Parse errors are defensive only — routeMessage already error-acked invalid JSON.
     try {
-      const scan = JSON.parse(text) as {
-        type?: string;
-        machine_id?: string;
-        new_pin?: string;
-      };
+      const scan = JSON.parse(text) as { type?: string; machine_id?: string };
 
       if (
         scan.type === "register" &&
         typeof scan.machine_id === "string" &&
         opts.manager.findByMachineId(scan.machine_id)
       ) {
-        // Resolve machineId so subsequent events (close, heartbeat) can look up the session.
-        machineId = scan.machine_id;
-        log.info({ machineId }, "client registered");
+        state.machineId = scan.machine_id;
+        log.info({ machineId: state.machineId }, "client registered");
       }
 
       if (scan.type === "update_pin" && typeof scan.machine_id === "string") {
-        // DEV-RULES §10: never log PINs in clear — pass through maskPin.
-        log.debug(
-          {
-            machineId: scan.machine_id,
-            pin: scan.new_pin ? maskPin(scan.new_pin) : undefined,
-          },
-          "pin updated",
-        );
+        // DEV-RULES §10: never log PINs — log only the fact that it changed.
+        log.debug({ machineId: scan.machine_id, pinUpdated: true }, "pin updated");
       }
     } catch {
-      // Unparseable payload already handled by routeMessage — nothing to log here.
+      // Defensive — routeMessage already error-acked invalid JSON.
     }
   });
+}
 
-  // --- Heartbeat timer ---
-  // Runs every HEARTBEAT_CHECK_INTERVAL_MS. If the client has been silent for more
-  // than HEARTBEAT_TIMEOUT_MS since its last ping, the socket is force-closed.
-  const heartbeatTimer = setInterval(() => {
-    if (!machineId) return;
-    const client = opts.manager.findByMachineId(machineId);
+// Starts a periodic heartbeat check. Silent clients (> HEARTBEAT_TIMEOUT_MS)
+// get their socket force-closed. Returns the timer id for cleanup on close.
+function startHeartbeatTimer(
+  socket: WebSocket,
+  state: ConnectionState,
+  opts: ConnectionOptions,
+  log: Logger,
+): ReturnType<typeof setInterval> {
+  return setInterval(() => {
+    if (!state.machineId) return;
+    const client = opts.manager.findByMachineId(state.machineId);
     if (!client) return;
 
     const elapsed = Date.now() - client.lastPingAt.getTime();
     if (elapsed > HEARTBEAT_TIMEOUT_MS) {
-      log.warn({ machineId, elapsed }, "heartbeat timeout — closing socket");
+      log.warn({ machineId: state.machineId, elapsed }, "heartbeat timeout — closing socket");
       try {
         socket.close();
       } catch {
@@ -90,17 +89,26 @@ export function handleConnection(socket: WebSocket, opts: ConnectionOptions): vo
       }
     }
   }, HEARTBEAT_CHECK_INTERVAL_MS);
+}
 
-  // --- Close handler ---
+// Wires all lifecycle events (message / close / error) on a freshly accepted WebSocket.
+// Orchestrates the two helpers above and owns the close/error listeners directly.
+export function handleConnection(socket: WebSocket, opts: ConnectionOptions): void {
+  const state: ConnectionState = {};
+  const log = opts.logger.child({ socket_id: crypto.randomUUID() });
+  log.info("client connected");
+
+  attachMessageListener(socket, state, opts, log);
+  const heartbeatTimer = startHeartbeatTimer(socket, state, opts, log);
+
   socket.on("close", () => {
     clearInterval(heartbeatTimer);
-    if (machineId) {
-      opts.manager.remove(machineId);
-      log.info({ machineId }, "client disconnected");
+    if (state.machineId) {
+      opts.manager.remove(state.machineId);
+      log.info({ machineId: state.machineId }, "client disconnected");
     }
   });
 
-  // --- Error handler ---
   socket.on("error", (err: unknown) => {
     log.error({ err }, "socket error");
   });
