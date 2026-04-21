@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { generatePin } from "./pin-generator";
 import {
   DEFAULT_PIN_ROTATION_MS,
@@ -23,23 +23,17 @@ export function usePin(
   const rotationMs = config.rotationIntervalMs ?? DEFAULT_PIN_ROTATION_MS;
 
   const [session, setSession] = useState<PinSession>(() => createSession(rotationMs));
-  const [secondsRemaining, setSecondsRemaining] = useState(() =>
-    secondsUntil(session.expiresAt),
-  );
+  // `now` is a 1Hz-ticking timestamp used to derive secondsRemaining during render.
+  // Keeping a single setState (in the interval callback only) keeps us clear of the
+  // react-hooks/set-state-in-effect rule while ensuring the derived countdown is
+  // always computed against the freshest session.expiresAt (no stale 1s window).
+  const [now, setNow] = useState(() => Date.now());
+  const secondsRemaining = secondsUntil(session.expiresAt, now);
 
-  // Keep the latest expiry in a ref so the countdown tick reads the current
-  // value without re-subscribing to the interval on every state update.
-  // Updated inside an effect to comply with react-hooks/refs (no ref writes during render).
-  const expiresAtRef = useRef(session.expiresAt);
-  useEffect(() => {
-    expiresAtRef.current = session.expiresAt;
-  }, [session.expiresAt]);
-
-  // 1Hz countdown tick - drives the PinTimer progress display.
-  // Reads expiresAtRef so it always sees the latest expiry without re-creating the interval.
+  // 1Hz tick - drives the PinTimer progress display via `now`.
   useEffect(() => {
     const id = window.setInterval(() => {
-      setSecondsRemaining(secondsUntil(expiresAtRef.current));
+      setNow(Date.now());
     }, 1000);
     return () => window.clearInterval(id);
   }, []);
@@ -53,9 +47,12 @@ export function usePin(
       setSession(createSession(rotationMs));
     }, delay);
     return () => window.clearTimeout(id);
-  }, [session, rotationMs]);
+  }, [session.expiresAt, rotationMs]);
 
   const regenerate = useCallback(() => {
+    // Re-seed `now` so the derived secondsRemaining immediately reflects the
+    // full interval instead of waiting up to 1s for the next tick.
+    setNow(Date.now());
     setSession(createSession(rotationMs));
   }, [rotationMs]);
 
@@ -68,6 +65,6 @@ function createSession(rotationMs: number): PinSession {
   return { pin: generatePin(), generatedAt, expiresAt };
 }
 
-function secondsUntil(date: Date): number {
-  return Math.max(0, Math.ceil((date.getTime() - Date.now()) / 1000));
+function secondsUntil(date: Date, nowMs: number): number {
+  return Math.max(0, Math.ceil((date.getTime() - nowMs) / 1000));
 }

@@ -42,4 +42,21 @@ describe("usePin", () => {
 
     expect(result.current.session.pin).not.toBe(firstPin);
   });
+
+  it("regenerate() resets secondsRemaining to the full interval", () => {
+    const { result } = renderHook(() => usePin({ rotationIntervalMs: 10_000 }));
+
+    act(() => {
+      vi.advanceTimersByTime(4000);
+    });
+    expect(result.current.secondsRemaining).toBeLessThanOrEqual(6);
+
+    act(() => {
+      result.current.regenerate();
+    });
+
+    // After regenerate(), expiresAt is now + rotationMs, so the countdown
+    // should bounce back close to the full interval (10s).
+    expect(result.current.secondsRemaining).toBeGreaterThanOrEqual(9);
+  });
 });
