@@ -21,9 +21,9 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
-# Stronghold: encrypted key-value vault for machine_id persistence
-tauri-plugin-stronghold = "2"
-# Direct iota_stronghold access for Rust-side store operations (get/insert/commit)
+# Direct iota_stronghold access for Rust-side store operations (get/insert/commit).
+# No `tauri-plugin-stronghold` needed: no JS caller in Phase 1, and dual ownership
+# of the snapshot file (plugin + direct instance) would race on commits.
 iota_stronghold = "2"
 # Zeroize: securely wipe sensitive bytes from memory
 zeroize = { version = "1", features = ["zeroize_derive"] }

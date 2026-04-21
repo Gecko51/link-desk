@@ -1,31 +1,24 @@
 //! Stronghold vault wrapper for LinkDesk.
 //!
 //! Provides deterministic password derivation and a managed state type
-//! (`StrongholdState`) so Rust commands can read/write the vault directly
-//! without going through the JS layer.
+//! (`StrongholdState`) so Rust commands can read/write the vault directly.
 //!
-//! Architecture note: `tauri-plugin-stronghold` only exposes store operations
-//! to the frontend via its own Tauri commands.  For Rust-side access we manage
-//! our own `iota_stronghold::Stronghold` instance through `app.manage()`.
+//! Architecture note: we use `iota_stronghold` directly (no Tauri plugin).
+//! The plugin was dropped in Phase 1 because no JS code consumes it and
+//! dual-ownership of the snapshot file would create race conditions.
 
 use crate::errors::AppError;
 use iota_stronghold::{KeyProvider, SnapshotPath};
 use sha2::{Digest, Sha256};
-use std::{
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
+use std::{path::PathBuf, sync::Arc};
 use tauri::{AppHandle, Manager};
+use tokio::sync::Mutex;
 use zeroize::Zeroizing;
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
 /// Filename for the encrypted Stronghold snapshot on disk.
 const STRONGHOLD_FILENAME: &str = "linkdesk.stronghold";
-
-/// Argon2 salt file — used by `tauri-plugin-stronghold`'s `Builder::with_argon2`.
-/// The plugin reads/writes this file automatically.
-pub const SALT_FILENAME: &str = "linkdesk-stronghold.salt";
 
 /// Hardcoded domain-separation salt baked into the password derivation.
 /// NOT a user secret — just prevents casual file-system inspection.
@@ -42,17 +35,6 @@ pub fn vault_path(app: &AppHandle) -> Result<PathBuf, AppError> {
         .map_err(|e| AppError::Stronghold(format!("app_local_data_dir: {e}")))?;
     std::fs::create_dir_all(&dir)?;
     Ok(dir.join(STRONGHOLD_FILENAME))
-}
-
-/// Returns the absolute path to the argon2 salt file.
-/// Used when initialising `tauri-plugin-stronghold::Builder::with_argon2`.
-pub fn salt_path(app: &AppHandle) -> Result<PathBuf, AppError> {
-    let dir = app
-        .path()
-        .app_local_data_dir()
-        .map_err(|e| AppError::Stronghold(format!("app_local_data_dir: {e}")))?;
-    std::fs::create_dir_all(&dir)?;
-    Ok(dir.join(SALT_FILENAME))
 }
 
 // ── Password derivation ───────────────────────────────────────────────────────
@@ -79,7 +61,10 @@ pub fn derive_password(app: &AppHandle) -> Result<Zeroizing<Vec<u8>>, AppError> 
 
 /// Thread-safe wrapper around a `iota_stronghold::Stronghold` instance.
 ///
-/// Registered via `app.manage(StrongholdState::new(...))` in `lib.rs`.
+/// Uses `tokio::sync::Mutex` because the lock is held across `.await` points
+/// inside async Tauri commands — a `std::sync::Mutex` would block the runtime.
+///
+/// Registered via `app.manage(...)` in `lib.rs`.
 /// Commands receive it as `State<'_, StrongholdState>`.
 pub struct StrongholdState {
     inner: Arc<Mutex<StrongholdInner>>,
@@ -117,11 +102,12 @@ impl StrongholdState {
     }
 
     /// Reads a byte value from the named client's store, returns `None` if absent.
-    pub fn get(&self, client_name: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, AppError> {
-        let guard = self
-            .inner
-            .lock()
-            .map_err(|e| AppError::Stronghold(format!("mutex poisoned: {e}")))?;
+    pub async fn get(
+        &self,
+        client_name: &[u8],
+        key: &[u8],
+    ) -> Result<Option<Vec<u8>>, AppError> {
+        let guard = self.inner.lock().await;
 
         // `get_client` returns the client if it exists, error otherwise.
         // Map the "not found" case to `None`.
@@ -136,18 +122,18 @@ impl StrongholdState {
             .map_err(|e| AppError::Stronghold(format!("store.get: {e}")))
     }
 
-    /// Writes `value` into the named client's store under `key`, then commits
-    /// the snapshot to disk so the data survives a restart.
-    pub fn insert_and_save(
+    /// Insert a key/value pair and immediately flush the snapshot to disk.
+    ///
+    /// NOTE: commits on every call - fine for low-frequency writes (machine_id,
+    /// config). Do NOT reuse this helper for high-frequency writes (session logs,
+    /// per-event tracing); batch writes into a periodic commit instead.
+    pub async fn insert_and_save(
         &self,
         client_name: &[u8],
         key: &[u8],
         value: Vec<u8>,
     ) -> Result<(), AppError> {
-        let guard = self
-            .inner
-            .lock()
-            .map_err(|e| AppError::Stronghold(format!("mutex poisoned: {e}")))?;
+        let guard = self.inner.lock().await;
 
         // Load existing client or create a new one
         let client = guard

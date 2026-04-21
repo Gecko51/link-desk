@@ -25,14 +25,16 @@ pub async fn get_machine_id(
     stronghold: State<'_, StrongholdState>,
 ) -> Result<String, AppError> {
     // Try to read an existing machine_id from the vault
-    if let Some(bytes) = stronghold.get(CLIENT_NAME, KEY_MACHINE_ID)? {
+    if let Some(bytes) = stronghold.get(CLIENT_NAME, KEY_MACHINE_ID).await? {
         return String::from_utf8(bytes)
             .map_err(|e| AppError::Stronghold(format!("invalid utf-8 in stored id: {e}")));
     }
 
     // First call: generate, persist and return a new UUID
     let new_id = Uuid::new_v4().to_string();
-    stronghold.insert_and_save(CLIENT_NAME, KEY_MACHINE_ID, new_id.as_bytes().to_vec())?;
+    stronghold
+        .insert_and_save(CLIENT_NAME, KEY_MACHINE_ID, new_id.as_bytes().to_vec())
+        .await?;
 
     Ok(new_id)
 }
@@ -48,6 +50,8 @@ pub async fn generate_machine_id(
     stronghold: State<'_, StrongholdState>,
 ) -> Result<String, AppError> {
     let new_id = Uuid::new_v4().to_string();
-    stronghold.insert_and_save(CLIENT_NAME, KEY_MACHINE_ID, new_id.as_bytes().to_vec())?;
+    stronghold
+        .insert_and_save(CLIENT_NAME, KEY_MACHINE_ID, new_id.as_bytes().to_vec())
+        .await?;
     Ok(new_id)
 }
