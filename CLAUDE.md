@@ -22,7 +22,7 @@ Monorepo npm workspaces :
 - **Commentaires de code en anglais** (DEV-RULES §1 — convention internationale). Seuls la prose utilisateur, les READMEs, CHANGELOG et documents restent en français.
 - **TypeScript strict** obligatoire : pas de `any`, pas de `as unknown as`. Props typées systématiquement. Extend des props HTML via `React.ComponentProps<'button'>`.
 - **Rust** : pas de `.unwrap()` / `.expect()` en prod, erreurs via `thiserror`, zéro warning `clippy` toléré (`#![deny(warnings)]` en Phase 5).
-- **Zod** obligatoire pour valider toute donnée venant de l'extérieur (WS, data channel, commandes Tauri, localStorage).
+- **Zod** obligatoire pour valider toute donnée venant de l'extérieur (WS, data channel, commandes Tauri, localStorage). _Dette connue Phase 1 :_ le wrapper `src/lib/tauri.ts` ne valide pas encore les résultats (toutes les commandes actuelles retournent un `string` simple). À câbler dès que Phase 2/3 introduit des payloads structurés (messages WS, SDP, ICE).
 - **Context7 MCP** : requis avant de coder une API de librairie (tauri, tauri-plugin-stronghold, react-router-dom, fastify, ws, zod, shadcn). Ne jamais coder une API de mémoire sans check.
 
 ## Commandes courantes
