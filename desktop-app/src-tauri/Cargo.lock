@@ -706,11 +706,16 @@ dependencies = [
 name = "desktop-app"
 version = "0.1.0"
 dependencies = [
+ "rand 0.8.6",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-opener",
+ "thiserror 1.0.69",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]
