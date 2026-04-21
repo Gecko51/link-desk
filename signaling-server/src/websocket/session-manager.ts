@@ -59,6 +59,8 @@ export class SessionManager {
     if (client) client.lastPingAt = at;
   }
 
+  // Removes the client from both indexes. Does NOT close the socket -
+  // the caller is expected to handle that (normally via the socket's onClose event).
   remove(machineId: string): void {
     const client = this.byMachineId.get(machineId);
     if (!client) return;

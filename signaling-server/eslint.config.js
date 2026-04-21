@@ -16,6 +16,7 @@ export default tseslint.config(
       globals: {
         process: "readonly",
         console: "readonly",
+        crypto: "readonly",
         setInterval: "readonly",
         clearInterval: "readonly",
         setTimeout: "readonly",
