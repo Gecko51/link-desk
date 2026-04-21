@@ -2,13 +2,16 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusBadge } from "@/components/status-badge";
 import { PinInput } from "@/components/pin-input";
 import { formatPin } from "@/features/pin/pin-generator";
+import { useAppState } from "@/app-state";
 
 // Controller view — PIN entry screen.
 // Phase 1: handleConnect is a no-op that echoes the PIN in a toast.
 // Phase 3 will wire this to the signaling + WebRTC handshake.
 export function ControllerRoute() {
+  const { signaling } = useAppState();
   const [pin, setPin] = useState("");
 
   // The button is active only when exactly 9 digits have been entered.
@@ -29,10 +32,12 @@ export function ControllerRoute() {
     >
       <Card className="w-full max-w-2xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Saisissez le code</CardTitle>
+          <div className="flex justify-center">
+            <StatusBadge state={signaling.connection} />
+          </div>
+          <CardTitle className="mt-2 text-2xl">Saisissez le code</CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">
-            Entrez les 9 chiffres communiqués par la personne que vous allez
-            dépanner.
+            Entrez les 9 chiffres communiqués par la personne que vous allez dépanner.
           </p>
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-6">

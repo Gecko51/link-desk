@@ -5,6 +5,9 @@ import { HostRoute } from "@/routes/host";
 import { ControllerRoute } from "@/routes/controller";
 import { Toaster } from "@/components/ui/sonner";
 import { useMachineId } from "@/features/machine-id/use-machine-id";
+import { usePin } from "@/features/pin/use-pin";
+import { useSignaling } from "@/features/signaling/use-signaling";
+import { AppStateContext } from "@/app-state";
 import "./index.css";
 
 // Memory router: no browser URL exposed to end user (PRD §7).
@@ -23,6 +26,16 @@ export default function App() {
   // The UUID itself is never shown to the user (PRD §3 Module 1).
   const machine = useMachineId();
 
+  // PIN hoisted to app level so all routes share a single rotation lifecycle.
+  const { session: pinSession, secondsRemaining, regenerate: regeneratePin } = usePin();
+
+  // Signaling hoisted to app level — auto-connects on boot, sends register with current PIN.
+  const signaling = useSignaling({
+    machineId: machine.id,
+    pin: pinSession.pin,
+    pinExpiresAt: pinSession.expiresAt,
+  });
+
   // Dev-only flag log. Never log the UUID in prod (DEV-RULES §10).
   useEffect(() => {
     if (import.meta.env.DEV && machine.id) {
@@ -31,9 +44,11 @@ export default function App() {
   }, [machine.id]);
 
   return (
-    <>
+    <AppStateContext.Provider
+      value={{ machineId: machine.id, pinSession, secondsRemaining, regeneratePin, signaling }}
+    >
       <RouterProvider router={router} />
       <Toaster />
-    </>
+    </AppStateContext.Provider>
   );
 }

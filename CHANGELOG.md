@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-04-21 — Phase 2 : Signaling server + enregistrement
+
+### Added
+- Workspace `signaling-server` (Fastify 4 + `@fastify/websocket` 10 + Pino 9 + Zod 3)
+- Endpoint WS `/signaling` : messages `register`, `update_pin`, `ping`/`pong`
+- `SessionManager` in-memory avec double index (`machine_id` + `current_pin`)
+- Endpoint `GET /health` (liveness)
+- Heartbeat serveur-side (timeout 45s grace) + client-side (ping 30s)
+- Client : `SignalingClient` (WS wrapper + backoff exponentiel 1s → 30s + `WebSocketLike` interface) + hook `useSignaling`
+- Refactor `App.tsx` : context `AppState` dans `src/app-state.tsx`, hoisting `usePin` + `useSignaling`
+- Composant `StatusBadge` (5 états : Connecté / Connexion / Reconnexion / Hors ligne / Désactivé)
+- Tests : server 26 (unit + 1 integration 2 clients simultanés), client 22
+
+### Changed
+- Routes `Home/Host/Controller` consomment `useAppState` au lieu de hooks locaux
+- `tsconfig.json` du server sans `rootDir` (dette Phase 5 — split build vs typecheck)
+
+### Notes
+- Schémas Zod dupliqués client/serveur (duplication contrôlée, consolidation Phase 5)
+- Pas de rate-limit, pas d'origin check strict, pas de Docker — strict périmètre PRD §9
+
 ## [0.1.0] — 2026-04-18 — Phase 1 : Setup & UI statique
 
 ### Added
