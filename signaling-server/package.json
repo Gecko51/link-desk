@@ -15,14 +15,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "fastify": "^4",
     "@fastify/websocket": "^10",
+    "fastify": "^4",
     "pino": "^9",
     "pino-pretty": "^11",
     "ws": "^8",
     "zod": "^3"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
     "@types/node": "^20",
     "@types/ws": "^8",
     "@typescript-eslint/eslint-plugin": "^8",
@@ -30,6 +31,7 @@
     "eslint": "^9",
     "tsx": "^4",
     "typescript": "^5",
+    "typescript-eslint": "^8.59.0",
     "vitest": "^2"
   },
   "engines": {
