@@ -1,6 +1,7 @@
 import { createContext, useContext } from "react";
 import type { PinSession } from "@/features/pin/pin.types";
-import type { SignalingState } from "@/features/signaling/signaling.types";
+import type { SignalingApi } from "@/features/signaling/signaling.types";
+import type { UseSessionApi } from "@/features/session/use-session";
 
 // Aggregated application state shared across all routes via React Context.
 export interface AppState {
@@ -8,7 +9,10 @@ export interface AppState {
   pinSession: PinSession;
   secondsRemaining: number;
   regeneratePin: () => void;
-  signaling: SignalingState;
+  // Signaling: état de connexion WS + send + onMessage (encapsulé, pas de leak de client).
+  signaling: SignalingApi;
+  // Session: orchestrateur WebRTC (état, connexion, envoi de messages, fin).
+  session: UseSessionApi;
 }
 
 // Context consumed by all routes. `null` only before mount (impossible at render time).

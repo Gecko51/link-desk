@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
@@ -8,10 +7,10 @@ import { formatPin } from "@/features/pin/pin-generator";
 import { useAppState } from "@/app-state";
 
 // Controller view — PIN entry screen.
-// Phase 1: handleConnect is a no-op that echoes the PIN in a toast.
-// Phase 3 will wire this to the signaling + WebRTC handshake.
+// Phase 3: handleConnect envoie un connect_request au serveur de signaling
+// via session.requestConnect (useSession → SignalingApi.send).
 export function ControllerRoute() {
-  const { signaling } = useAppState();
+  const { signaling, session } = useAppState();
   const [pin, setPin] = useState("");
 
   // The button is active only when exactly 9 digits have been entered.
@@ -19,10 +18,8 @@ export function ControllerRoute() {
 
   function handleConnect() {
     if (!complete) return;
-    // Simulated connection — real networking lands in Phase 3.
-    toast.success("Code saisi", {
-      description: `Connexion simulée avec ${formatPin(pin)} (réseau en Phase 3).`,
-    });
+    // Envoie le PIN (formatté avec tirets) au serveur de signaling.
+    session.requestConnect(formatPin(pin));
   }
 
   return (
