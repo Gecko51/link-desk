@@ -13,6 +13,10 @@ export interface TauriCommandMap {
     args: Record<string, never>;
     result: string; // raw 9 digits, unformatted
   };
+  show_consent_dialog: {
+    args: { peer_label: string; timeout_secs: number };
+    result: boolean; // true = accepted, false = refused OR timed out
+  };
 }
 
 // Shape matching AppError serialization (see errors.rs).
