@@ -8,14 +8,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Monorepo npm workspaces :
 - `desktop-app/` — client Tauri (host + controller, frontend React + backend Rust natif)
-- `signaling-server/` — serveur WebSocket de signaling (démarrera en Phase 2, actuellement un placeholder `.gitkeep`)
+- `signaling-server/` — serveur WebSocket de signaling (Fastify + ws, opérationnel depuis Phase 2)
 
 ## À lire avant de toucher au code
 
 1. **`PRD.md`** — spec produit complète : 5 phases (v0.1 → v1.0), user stories, data model, commandes Tauri, messages WS/data-channel, contraintes perf/sécu.
 2. **`STRUCTURE.md`** — arborescence cible du monorepo. Respecter les chemins et le nommage (`kebab-case.tsx` côté frontend, `snake_case.rs` côté Rust).
 3. **`DEV-RULES.md`** — règles de code, UI/UX, sécurité, git, debug. **Non négociable.**
-4. **`docs/superpowers/plans/`** — plan d'implémentation détaillé par phase. Phase 1 en cours sur la branche `feat/phase-1-setup`.
+4. **`docs/superpowers/plans/`** — plan d'implémentation détaillé par phase (Phases 1-3 complètes).
 
 ## Conventions qui dérogent aux préférences globales
 
@@ -65,7 +65,7 @@ Toute communication frontend ↔ Rust passe par des wrappers typés dans `src/li
 
 Côté Rust (`src-tauri/`), l'entrée est `lib.rs` qui enregistre les commandes via `tauri::generate_handler![]`. Les commandes sont groupées par domaine dans `commands/` (machine_id, pin, input_injection, consent, overlay, session_log). Le code bas-niveau OS (Stronghold, mapping keycodes, infos écrans) vit dans `core/`. Toutes les commandes retournent `Result<T, AppError>` (serde-serializable).
 
-Le handshake WebRTC (Phase 3+) : les 2 clients s'enregistrent auprès du signaling server avec leur machine_id + PIN courant. Le contrôleur envoie le PIN au serveur, qui relaie un `connect_offer` à l'hôte ; l'hôte affiche une popup OS-level de consentement ; si accepté, le serveur relaie les messages SDP/ICE jusqu'à établissement du data channel P2P. Ensuite plus aucun trafic ne passe par le signaling (vidéo + inputs sont pair-à-pair chiffrés DTLS/SRTP).
+Le handshake WebRTC (implémenté en Phase 3) : les 2 clients s'enregistrent auprès du signaling server avec leur machine_id + PIN courant. Le contrôleur envoie le PIN au serveur, qui relaie un `connect_offer` à l'hôte ; l'hôte affiche une popup OS-level de consentement (`tauri-plugin-dialog`, timeout 30s) ; si accepté, le serveur relaie les messages SDP/ICE jusqu'à établissement du data channel P2P. Ensuite plus aucun trafic ne passe par le signaling (vidéo + inputs sont pair-à-pair chiffrés DTLS/SRTP — Phase 4).
 
 ## Git
 

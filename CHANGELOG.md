@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-04-22 — Phase 3 : Handshake WebRTC & consentement
+
+### Added
+- Protocol signaling étendu : `connect_request`, `connect_offer`, `consent_response`, `session_ready`, `sdp_offer`, `sdp_answer`, `ice_candidate`, `peer_disconnected` (+ schémas Zod client + serveur)
+- Server : `ConnectionRequestTracker` (TTL 30s), `connect-handler`, `consent-handler`, `sdp-relay`
+- Server : `peer_disconnected` automatique sur close d'un peer en session (avec cleanup du tracker)
+- Server : integration test E2E 3 scenarios (connect+SDP, PIN inconnu, consent refusé)
+- Rust : commande `show_consent_dialog` via `tauri-plugin-dialog` 2.7 (popup OS-level + timeout 30s → refus par défaut)
+- Client : helpers WebRTC (`offer-answer.ts` avec `waitForIceGatheringComplete`, `peer-config.ts` STUN)
+- Client : hooks `usePeerConnection`, `useDataChannel`, `useSession` (state machine complète)
+- Client : 3 nouvelles routes (`/controller/connecting`, `/controller/session`, `/host/session`)
+- AppState étendu avec `session` (status, requestConnect, sendMessage, endSession)
+- 23 nouveaux tests (server 13, client 10) — 57 server + 47 client au total
+
+### Changed
+- `App.tsx` passe par un `AppLayout` route racine avec `<Outlet />` pour que `useSession` puisse utiliser `useNavigate` (tous les hooks vivent à l'intérieur du router)
+- `useSignaling` retourne désormais `SignalingApi` avec `send` + `onMessage` exposés (au lieu d'encapsuler le client)
+- `ControllerRoute.handleConnect` appelle `session.requestConnect(formatPin(pin))` au lieu du placeholder toast
+
+### Notes
+- Wait-for-complete ICE (pas de trickle) — `ice_candidate` défini dans le protocole mais pas émis en Phase 3
+- Data channel Phase 3 = `{ ordered: true }` reliable — Phase 4 switchera sur `maxRetransmits: 0` pour les inputs low-latency
+- `useSession` utilise 3 `useReducer` (au lieu de `useState`) pour contourner la règle ESLint `react-hooks/set-state-in-effect` v7
+
 ## [0.2.0] — 2026-04-21 — Phase 2 : Signaling server + enregistrement
 
 ### Added
