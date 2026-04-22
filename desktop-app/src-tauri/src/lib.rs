@@ -11,6 +11,7 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let handle = app.handle();
 
@@ -33,6 +34,7 @@ pub fn run() {
             commands::pin::generate_pin_native,
             commands::machine_id::get_machine_id,
             commands::machine_id::generate_machine_id,
+            commands::consent::show_consent_dialog,
         ])
         .run(tauri::generate_context!())
         // Boot failure is fatal with no recovery path - DEV-RULES §2 exception.
