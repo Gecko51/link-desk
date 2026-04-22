@@ -102,10 +102,26 @@ export class ConnectionRequestTracker {
     this.timers.set(sessionId, id);
   }
 
+  // Returns a snapshot of all tracked requests. Used by the close handler to find
+  // sessions involving a disconnecting peer.
+  list(): ConnectionRequest[] {
+    return Array.from(this.requests.values());
+  }
+
   // Clears the expiry timer for a sessionId.
   private clearTimer(sessionId: string): void {
     const id = this.timers.get(sessionId);
     if (id) clearTimeout(id);
     this.timers.delete(sessionId);
   }
+}
+
+// Returns all requests (pending or accepted) that involve the given machine.
+export function findSessionsForMachine(
+  tracker: ConnectionRequestTracker,
+  machineId: string,
+): ConnectionRequest[] {
+  return tracker.list().filter(
+    (r) => r.controllerId === machineId || r.hostId === machineId,
+  );
 }

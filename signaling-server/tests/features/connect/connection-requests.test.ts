@@ -55,4 +55,21 @@ describe("ConnectionRequestTracker", () => {
     expect(() => tracker.remove("nope")).not.toThrow();
     expect(() => tracker.markAccepted("nope")).not.toThrow();
   });
+
+  it("list() returns all requests", () => {
+    const req1 = tracker.create({ controllerId: A, hostId: B });
+    const req2 = tracker.create({ controllerId: B, hostId: A });
+    expect(tracker.list()).toHaveLength(2);
+    expect(tracker.list().map((r) => r.sessionId).sort()).toEqual([req1.sessionId, req2.sessionId].sort());
+  });
+
+  it("findSessionsForMachine returns only involving sessions", async () => {
+    const { findSessionsForMachine } = await import("@/features/connect/connection-requests");
+    const C = "550e8400-e29b-41d4-a716-446655440007";
+    tracker.create({ controllerId: A, hostId: B });
+    tracker.create({ controllerId: A, hostId: C });
+    const forB = findSessionsForMachine(tracker, B);
+    expect(forB).toHaveLength(1);
+    expect(forB[0].hostId).toBe(B);
+  });
 });
