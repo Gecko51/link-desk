@@ -1,6 +1,8 @@
 import type { WebSocket } from "ws";
 import type { Logger } from "pino";
 import type { SessionManager } from "./session-manager";
+import type { ConnectionRequestTracker } from "@/features/connect/connection-requests";
+import { findSessionsForMachine } from "@/features/connect/connection-requests";
 import { routeMessage } from "./message-router";
 
 // Max silence before forced disconnect (DEV-RULES §7 — 30 s ping + 10 s timeout + slack).
@@ -12,6 +14,7 @@ const HEARTBEAT_CHECK_INTERVAL_MS = 15_000;
 
 interface ConnectionOptions {
   manager: SessionManager;
+  tracker: ConnectionRequestTracker;
   logger: Logger;
 }
 
@@ -40,7 +43,7 @@ function attachMessageListener(
     const text = toText(raw);
 
     // Delegate routing + error acks to the pure routeMessage function.
-    routeMessage(text, { manager: opts.manager, socket, machineId: state.machineId });
+    routeMessage(text, { manager: opts.manager, tracker: opts.tracker, socket, machineId: state.machineId });
 
     // Inspect the payload to resolve machineId for subsequent lifecycle events.
     // Parse errors are defensive only — routeMessage already error-acked invalid JSON.
@@ -104,6 +107,22 @@ export function handleConnection(socket: WebSocket, opts: ConnectionOptions): vo
   socket.on("close", () => {
     clearInterval(heartbeatTimer);
     if (state.machineId) {
+      // Notify any peer currently sharing a session with us.
+      for (const req of findSessionsForMachine(opts.tracker, state.machineId)) {
+        const peerMachineId = req.controllerId === state.machineId ? req.hostId : req.controllerId;
+        const peer = opts.manager.findByMachineId(peerMachineId);
+        if (peer) {
+          const reason = req.controllerId === state.machineId
+            ? "controller_disconnected" as const
+            : "host_disconnected" as const;
+          peer.socket.send(JSON.stringify({
+            type: "peer_disconnected" as const,
+            session_id: req.sessionId,
+            reason,
+          }));
+        }
+        opts.tracker.remove(req.sessionId);
+      }
       opts.manager.remove(state.machineId);
       log.info({ machineId: state.machineId }, "client disconnected");
     }

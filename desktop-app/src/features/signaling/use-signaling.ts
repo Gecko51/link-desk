@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { SignalingClient } from "./signaling-client";
-import type { ConnectionState, SignalingState } from "./signaling.types";
+import type { ConnectionState, SignalingApi, SignalingState } from "./signaling.types";
 import type { ClientMessage, ServerMessage } from "./message-schemas";
 
 // Narrow interface mirroring SignalingClient's public surface.
@@ -50,8 +50,10 @@ function makeClient(
 // Architecture note: `registered` is tracked purely via a ref and synced
 // into React state by the polling interval callback. This avoids direct
 // setState() calls in effect bodies (react-hooks/set-state-in-effect rule).
+// Returns SignalingApi instead of SignalingState to expose send + onMessage
+// without leaking the client instance (preferred encapsulated approach).
 // ------------------------------------------------------------------
-export function useSignaling(opts: UseSignalingOptions): SignalingState {
+export function useSignaling(opts: UseSignalingOptions): SignalingApi {
   // Capture opts in a ref so interval callbacks always see fresh values
   // without being listed as effect dependencies (avoids extra reconnects).
   // Updated in a layout effect (before paint) so the ref is always current.
@@ -164,5 +166,25 @@ export function useSignaling(opts: UseSignalingOptions): SignalingState {
     });
   }, [client]);
 
-  return sigState;
+  // Stable send wrapper: delegates to the client or returns false if unavailable.
+  // useCallback ensures referential stability across renders.
+  const send = useCallback(
+    (msg: ClientMessage): boolean => {
+      if (client === null) return false;
+      return client.send(msg);
+    },
+    [client],
+  );
+
+  // Stable onMessage wrapper: delegates to the client or returns a no-op.
+  // useCallback ensures referential stability across renders.
+  const onMessage = useCallback(
+    (listener: (msg: ServerMessage) => void): (() => void) => {
+      if (client === null) return () => undefined;
+      return client.onMessage(listener);
+    },
+    [client],
+  );
+
+  return { ...sigState, send, onMessage };
 }
