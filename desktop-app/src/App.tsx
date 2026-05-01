@@ -6,6 +6,7 @@ import { ControllerRoute } from "@/routes/controller";
 import { HostSessionRoute } from "@/routes/host-session";
 import { ControllerConnectingRoute } from "@/routes/controller-connecting";
 import { ControllerSessionRoute } from "@/routes/controller-session";
+import { OverlayRoute } from "@/routes/overlay";
 import { Toaster } from "@/components/ui/sonner";
 import { useMachineId } from "@/features/machine-id/use-machine-id";
 import { usePin } from "@/features/pin/use-pin";
@@ -79,6 +80,7 @@ const router = createMemoryRouter(
         { path: "/controller", element: <ControllerRoute /> },
         { path: "/controller/connecting", element: <ControllerConnectingRoute /> },
         { path: "/controller/session", element: <ControllerSessionRoute /> },
+        { path: "/overlay", element: <OverlayRoute /> },
       ],
     },
   ],

@@ -22,6 +22,18 @@ pub enum AppError {
     /// Filesystem / OS I/O errors (surfaced as strings to keep serde simple).
     #[error("io error: {0}")]
     Io(String),
+
+    /// Input injection errors (enigo failures, unsupported keys).
+    #[error("input injection failed: {0}")]
+    InputInjection(String),
+
+    /// Overlay window lifecycle errors.
+    #[error("overlay window error: {0}")]
+    Overlay(String),
+
+    /// Screen info retrieval errors.
+    #[error("screen info error: {0}")]
+    ScreenInfo(String),
 }
 
 /// Automatic conversion from std::io::Error so `?` works in I/O code paths.
