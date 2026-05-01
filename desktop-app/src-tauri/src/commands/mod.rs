@@ -6,3 +6,4 @@
 pub mod consent;
 pub mod machine_id;
 pub mod pin;
+pub mod screen_info;
