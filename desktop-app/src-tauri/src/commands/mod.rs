@@ -6,5 +6,6 @@
 pub mod consent;
 pub mod input_injection;
 pub mod machine_id;
+pub mod overlay;
 pub mod pin;
 pub mod screen_info;
