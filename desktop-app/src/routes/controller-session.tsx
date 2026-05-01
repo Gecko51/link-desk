@@ -4,27 +4,17 @@ import { RemoteScreen } from "@/components/remote-screen";
 import { SessionToolbar } from "@/components/session-toolbar";
 import { useDataChannelMessages } from "@/features/session/use-data-channel-messages";
 import { useInputCapture } from "@/features/input-capture/use-input-capture";
-import type { ScreenMetadata } from "@/features/screen-capture/capture.types";
 
 export function ControllerSessionRoute() {
   const { session } = useAppState();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const messages = useDataChannelMessages(session.dataChannel);
-  // screenMeta is received from the host for future cursor scaling (Phase 5)
-  const [_screenMeta, setScreenMeta] = useState<ScreenMetadata | null>(null);
   const [duration, setDuration] = useState("00:00");
-  const sessionStartRef = useRef(Date.now());
+  const [sessionStart] = useState(() => Date.now());
 
-  // Listen for screen_metadata from the host.
+  // Listen for messages from the host (disconnect signal).
   useEffect(() => {
     const unsubscribe = messages.subscribe((msg) => {
-      if (msg.type === "screen_metadata") {
-        setScreenMeta({
-          width: msg.width,
-          height: msg.height,
-          scaleFactor: msg.scale_factor,
-        });
-      }
       if (msg.type === "disconnect") {
         session.endSession();
       }
@@ -39,13 +29,13 @@ export function ControllerSessionRoute() {
   // Update duration timer.
   useEffect(() => {
     const interval = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - sessionStartRef.current) / 1000);
+      const elapsed = Math.floor((Date.now() - sessionStart) / 1000);
       const mins = String(Math.floor(elapsed / 60)).padStart(2, "0");
       const secs = String(elapsed % 60).padStart(2, "0");
       setDuration(`${mins}:${secs}`);
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [sessionStart]);
 
   const handleDisconnect = () => {
     messages.send({ type: "disconnect", reason: "user_request" });

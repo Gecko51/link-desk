@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { emit } from "@tauri-apps/api/event";
 import { useAppState } from "@/app-state";
@@ -13,7 +13,7 @@ export function HostSessionRoute() {
   const { stream, status: captureStatus, startCapture, stopCapture } = useScreenCapture();
   const messages = useDataChannelMessages(session.dataChannel);
   const [screenMeta, setScreenMeta] = useState<ScreenMetadata | null>(null);
-  const sessionStartRef = useRef(Date.now());
+  const [sessionStart] = useState(() => Date.now());
 
   // Start screen capture when the route mounts.
   useEffect(() => {
@@ -66,18 +66,26 @@ export function HostSessionRoute() {
 
     void emit("session-status", {
       peerLabel,
-      startedAt: sessionStartRef.current,
+      startedAt: sessionStart,
     });
 
     const interval = setInterval(() => {
       void emit("session-status", {
         peerLabel,
-        startedAt: sessionStartRef.current,
+        startedAt: sessionStart,
       });
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [session.status]);
+  }, [session.status, sessionStart]);
+
+  const handleDisconnect = useCallback(() => {
+    messages.send({ type: "disconnect", reason: "user_request" });
+    setTimeout(() => {
+      stopCapture();
+      session.endSession();
+    }, 500);
+  }, [messages, stopCapture, session]);
 
   // Listen for disconnect click from overlay window.
   useEffect(() => {
@@ -87,23 +95,15 @@ export function HostSessionRoute() {
     return () => {
       void unlisten.then((fn) => fn());
     };
-  }, []);
+  }, [handleDisconnect]);
 
   // Inject incoming input events from the controller.
   useInputInjection({
     messages,
     screenMetadata: screenMeta,
     enabled: captureStatus === "capturing",
-    onDisconnectReceived: () => handleDisconnect(),
+    onDisconnectReceived: handleDisconnect,
   });
-
-  const handleDisconnect = () => {
-    messages.send({ type: "disconnect", reason: "user_request" });
-    setTimeout(() => {
-      stopCapture();
-      session.endSession();
-    }, 500);
-  };
 
   return (
     <main

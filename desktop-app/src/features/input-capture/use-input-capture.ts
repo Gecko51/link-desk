@@ -45,16 +45,15 @@ export interface UseInputCaptureOptions {
  * or when the component unmounts.
  */
 export function useInputCapture(opts: UseInputCaptureOptions): void {
+  const { videoRef, messages, enabled } = opts;
   // Tracks the timestamp of the last sent mouse-move event for throttling.
   // Stored in a ref (not state) so updates don't trigger re-renders.
   const lastMouseTimeRef = useRef(0);
 
   useEffect(() => {
-    const video = opts.videoRef.current;
+    const video = videoRef.current;
     // Guard: do nothing if disabled or if the video element isn't mounted yet.
-    if (!opts.enabled || !video) return;
-
-    const { messages } = opts;
+    if (!enabled || !video) return;
 
     // Helper: send a mouse event while respecting the 60Hz throttle for moves.
     const sendMouseThrottled = (
@@ -122,5 +121,5 @@ export function useInputCapture(opts: UseInputCaptureOptions): void {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [opts.enabled, opts.videoRef, opts.messages]);
+  }, [enabled, videoRef, messages]);
 }

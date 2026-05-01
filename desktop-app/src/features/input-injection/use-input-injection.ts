@@ -41,18 +41,14 @@ export interface UseInputInjectionOptions {
  * change or when the component using this hook unmounts.
  */
 export function useInputInjection(opts: UseInputInjectionOptions): void {
+  const { enabled, screenMetadata, messages, onDisconnectReceived } = opts;
+
   useEffect(() => {
-    // Guard: do nothing until the session is active and screen info is known.
-    if (!opts.enabled || !opts.screenMetadata) return;
+    if (!enabled || !screenMetadata) return;
 
-    // Capture screen in a local const so TypeScript narrows it as non-null
-    // inside the subscriber callback (opts.screenMetadata could theoretically
-    // change between renders, but the effect re-runs on such changes anyway).
-    const screen = opts.screenMetadata;
+    const screen = screenMetadata;
 
-    // Subscribe to the Zod-validated message stream.
-    // Returns an unsubscribe function used as the effect cleanup below.
-    const unsubscribe = opts.messages.subscribe((msg: DataChannelMessage) => {
+    const unsubscribe = messages.subscribe((msg: DataChannelMessage) => {
       switch (msg.type) {
         case "mouse_event": {
           // Convert normalised [0,1] ratios to physical pixel coordinates on
@@ -68,8 +64,7 @@ export function useInputInjection(opts: UseInputInjectionOptions): void {
           break;
         }
         case "disconnect": {
-          // Let the parent route know the controller ended the session.
-          opts.onDisconnectReceived?.();
+          onDisconnectReceived?.();
           break;
         }
         case "screen_metadata":
@@ -82,5 +77,5 @@ export function useInputInjection(opts: UseInputInjectionOptions): void {
     // Clean up the subscription when enabled/screenMetadata/messages change
     // or when the component unmounts.
     return unsubscribe;
-  }, [opts.enabled, opts.screenMetadata, opts.messages, opts.onDisconnectReceived]);
+  }, [enabled, screenMetadata, messages, onDisconnectReceived]);
 }
