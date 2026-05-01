@@ -1,39 +1,18 @@
 // Pure functions that convert DOM events into typed data-channel messages.
 // These are intentionally side-effect-free so they can be tested in isolation.
 //
-// DEPENDENCY NOTE: The return types below mirror the Zod schemas that will live
-// in @/features/session/message-types once that module is created (Phase 3 Task 2).
-// Once available, replace the inline types with:
-//   import type { MouseEvent as DCMouseEvent, KeyboardEvent as DCKeyboardEvent }
-//     from "@/features/session/message-types";
+// Return types are derived from the Zod schemas in message-types.ts so that
+// any schema change is automatically reflected here at compile time.
 
+import type {
+  MouseEvent as DCMouseEvent,
+  KeyboardEvent as DCKeyboardEvent,
+} from "@/features/session/message-types";
 import type { MouseAction, MouseButton, KeyAction } from "./input.types";
 
-// ─── Inline return types (temporary until message-types.ts is created) ─────────
-
-/** Shape of a mouse data-channel message. */
-export interface DCMouseEvent {
-  type: "mouse_event";
-  x_ratio: number;    // Normalised horizontal position [0, 1]
-  y_ratio: number;    // Normalised vertical position [0, 1]
-  button: MouseButton;
-  action: MouseAction;
-  scroll_delta?: number; // Only present when action === "scroll"
-}
-
-/** Shape of a keyboard data-channel message. */
-export interface DCKeyboardEvent {
-  type: "keyboard_event";
-  key: string;         // e.g. "a", "Enter", "F4"
-  code: string;        // e.g. "KeyA", "Enter", "F4"
-  modifiers: {
-    ctrl: boolean;
-    shift: boolean;
-    alt: boolean;
-    meta: boolean;
-  };
-  action: KeyAction;
-}
+// Re-export so callers can reference the return types without importing
+// from two different places.
+export type { DCMouseEvent, DCKeyboardEvent };
 
 // ─── Internal helpers ──────────────────────────────────────────────────────────
 
