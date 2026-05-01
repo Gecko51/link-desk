@@ -58,7 +58,7 @@ export function sessionReducer(status: SessionStatus, event: SessionEvent): Sess
       if (status.kind !== "awaiting_consent") return status;
       return { kind: "ended", reason: "declined" };
 
-    // ICE/SDP negotiation complete, data channel established
+    // ICE/SDP negotiation complete, data channel established — video not yet streaming
     case "peer_connected":
       if (status.kind !== "negotiating") return status;
       return {
@@ -66,7 +66,13 @@ export function sessionReducer(status: SessionStatus, event: SessionEvent): Sess
         sessionId: status.sessionId,
         role: status.role,
         peerId: status.peerId,
+        hasVideo: false,
       };
+
+    // Remote video track received — controller can now start input capture
+    case "video_track_received":
+      if (status.kind !== "connected") return status;
+      return { ...status, hasVideo: true };
 
     // Server reports peer disconnection with reason
     case "server_peer_disconnected":

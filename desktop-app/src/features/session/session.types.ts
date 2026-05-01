@@ -5,7 +5,7 @@ export type SessionStatus =
   | { kind: "requesting"; targetPin: string }
   | { kind: "awaiting_consent"; sessionId: string; role: SessionRole; peerId: string }
   | { kind: "negotiating"; sessionId: string; role: SessionRole; peerId: string }
-  | { kind: "connected"; sessionId: string; role: SessionRole; peerId: string }
+  | { kind: "connected"; sessionId: string; role: SessionRole; peerId: string; hasVideo: boolean }
   | { kind: "ended"; reason: SessionEndReason };
 
 export type SessionEndReason =
@@ -31,4 +31,5 @@ export type SessionEvent =
   | { type: "consent_accepted"; sessionId: string }
   | { type: "consent_declined" }
   | { type: "peer_connected"; sessionId: string }
+  | { type: "video_track_received" }
   | { type: "user_ended" };

@@ -79,11 +79,12 @@ describe("sessionReducer", () => {
       { type: "peer_connected", sessionId: "s1" },
     );
     expect(next.kind).toBe("connected");
+    if (next.kind === "connected") expect(next.hasVideo).toBe(false);
   });
 
   it("server_peer_disconnected (host_disconnected) from connected → ended(peer_disconnected)", () => {
     const next = sessionReducer(
-      { kind: "connected", sessionId: "s1", role: "host", peerId: "ctrl-1" },
+      { kind: "connected", sessionId: "s1", role: "host", peerId: "ctrl-1", hasVideo: false },
       { type: "server_peer_disconnected", sessionId: "s1", reason: "host_disconnected" },
     );
     expect(next).toEqual({ kind: "ended", reason: "peer_disconnected" });
@@ -112,7 +113,7 @@ describe("sessionReducer", () => {
 
   it("user_ended from connected → ended(local_disconnect)", () => {
     const next = sessionReducer(
-      { kind: "connected", sessionId: "s1", role: "host", peerId: "ctrl-1" },
+      { kind: "connected", sessionId: "s1", role: "host", peerId: "ctrl-1", hasVideo: false },
       { type: "user_ended" },
     );
     expect(next).toEqual({ kind: "ended", reason: "local_disconnect" });
@@ -124,6 +125,7 @@ describe("sessionReducer", () => {
       sessionId: "s1",
       role: "host" as const,
       peerId: "ctrl-1",
+      hasVideo: false,
     };
     // user_requested_connect on connected → no change
     const next = sessionReducer(s, {
@@ -131,5 +133,39 @@ describe("sessionReducer", () => {
       targetPin: "123-456-789",
     });
     expect(next).toBe(s);
+  });
+
+  // --- Tests pour video_track_received et hasVideo ---
+
+  it("peer_connected from negotiating → connected(hasVideo: false)", () => {
+    const next = sessionReducer(
+      { kind: "negotiating", sessionId: "s1", role: "host", peerId: "ctrl-1" },
+      { type: "peer_connected", sessionId: "s1" },
+    );
+    expect(next).toEqual({
+      kind: "connected",
+      sessionId: "s1",
+      role: "host",
+      peerId: "ctrl-1",
+      hasVideo: false,
+    });
+  });
+
+  it("video_track_received from connected → connected(hasVideo: true)", () => {
+    const connected = {
+      kind: "connected" as const,
+      sessionId: "s1",
+      role: "controller" as const,
+      peerId: "host-1",
+      hasVideo: false,
+    };
+    const next = sessionReducer(connected, { type: "video_track_received" });
+    expect(next).toEqual({ ...connected, hasVideo: true });
+  });
+
+  it("video_track_received from non-connected is ignored", () => {
+    const idle = initialSessionStatus;
+    const next = sessionReducer(idle, { type: "video_track_received" });
+    expect(next).toBe(idle);
   });
 });
