@@ -35,3 +35,5 @@ thiserror = "1"
 sha2 = "0.10"
 tokio = { version = "1", features = ["sync", "time", "macros"] }
 tauri-plugin-dialog = "2"
+enigo = "0.2"
+tauri-plugin-global-shortcut = "2"
