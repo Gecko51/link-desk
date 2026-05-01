@@ -22,21 +22,18 @@ export interface UseSessionOptions {
 
 export interface UseSessionApi {
   status: SessionStatus;
-  lastMessage: string | null;
-  // Controller: initiates a connection using the remote host's PIN.
+  dataChannel: RTCDataChannel | null;
+  remoteStream: MediaStream | null;
   requestConnect: (targetPin: string) => void;
-  // Sends a raw string over the open data channel. Returns false if not ready.
-  sendMessage: (data: string) => boolean;
-  // Ends the session (both roles).
+  addVideoTrack: (stream: MediaStream) => void;
   endSession: () => void;
 }
 
 // ------------------------------------------------------------------
-// Internal micro-reducers (useReducer replaces useState so dispatch can
-// be called inside effects without triggering react-hooks/set-state-in-effect).
+// Internal micro-reducers
 // ------------------------------------------------------------------
 
-const DATA_CHANNEL_LABEL = "linkdesk-phase3";
+const DATA_CHANNEL_LABEL = "linkdesk-control";
 const CONSENT_TIMEOUT_SECS = 30;
 
 type ChannelAction = { type: "set"; channel: RTCDataChannel | null };
@@ -48,17 +45,19 @@ function channelReducer(
   return action.channel;
 }
 
-type MessageAction = { type: "received"; data: string };
+type StreamAction = { type: "set"; stream: MediaStream | null };
 
-function messageReducer(_prev: string | null, action: MessageAction): string | null {
-  return action.data;
+function streamReducer(
+  _prev: MediaStream | null,
+  action: StreamAction,
+): MediaStream | null {
+  return action.stream;
 }
 
 // ------------------------------------------------------------------
-// Helpers (module-level to keep useSession body under 40 lines/fn).
+// Helpers
 // ------------------------------------------------------------------
 
-// Host side: applies the incoming SDP offer and replies with an answer.
 async function handleIncomingSdpOffer(
   peer: RTCPeerConnection | null,
   sdp: RTCSessionDescriptionInit,
@@ -71,7 +70,6 @@ async function handleIncomingSdpOffer(
   signaling.send({ type: "sdp_answer", session_id: sessionId, sdp: answer });
 }
 
-// Controller side: applies the incoming SDP answer and dispatches peer_connected.
 async function handleIncomingSdpAnswer(
   peer: RTCPeerConnection | null,
   sdp: RTCSessionDescriptionInit,
@@ -87,42 +85,41 @@ async function handleIncomingSdpAnswer(
 // Orchestrator hook
 // ------------------------------------------------------------------
 
-// Orchestrates the full WebRTC session lifecycle:
-// 1. Subscribes to server messages via signaling.onMessage.
-// 2. Drives the pure sessionReducer state machine.
-// 3. Shows the native consent dialog on the host side.
-// 4. Creates the SDP offer and data channel on the controller side.
-// 5. Navigates to the matching route on each status transition.
 export function useSession(opts: UseSessionOptions): UseSessionApi {
   const [status, dispatch] = useReducer(sessionReducer, initialSessionStatus);
   const [channel, setChannel] = useReducer(channelReducer, null);
-  const [lastMessage, setLastMessage] = useReducer(messageReducer, null);
+  const [remoteStream, setRemoteStream] = useReducer(streamReducer, null);
 
   const navigate = useNavigate();
 
-  // Keep a stable ref to the latest signaling API so async closures and
-  // event callbacks always see the current value without being re-subscribed.
   const signalingRef = useRef(opts.signaling);
   useEffect(() => {
     signalingRef.current = opts.signaling;
   }, [opts.signaling]);
 
-  // Forward incoming data channels (host role, receiver side).
   const handleIncomingDataChannel = useCallback((dc: RTCDataChannel) => {
     setChannel({ type: "set", channel: dc });
   }, []);
 
-  // RTCPeerConnection is alive only during negotiating or connected.
   const { peer } = usePeerConnection({
     active: status.kind === "negotiating" || status.kind === "connected",
     onIncomingDataChannel: handleIncomingDataChannel,
   });
 
-  // React to incoming data-channel messages.
-  useDataChannel({
-    channel,
-    onMessage: (data) => setLastMessage({ type: "received", data }),
-  });
+  useDataChannel({ channel });
+
+  // Listen for incoming video tracks (controller receives host's screen).
+  useEffect(() => {
+    if (!peer) return;
+    const handleTrack = (ev: RTCTrackEvent) => {
+      if (ev.streams[0]) {
+        setRemoteStream({ type: "set", stream: ev.streams[0] });
+        dispatch({ type: "video_track_received" });
+      }
+    };
+    peer.addEventListener("track", handleTrack);
+    return () => peer.removeEventListener("track", handleTrack);
+  }, [peer]);
 
   // Effect 1 — Subscribe to server messages and drive the state machine.
   useEffect(() => {
@@ -209,7 +206,10 @@ export function useSession(opts: UseSessionOptions): UseSessionApi {
   useEffect(() => {
     if (status.kind !== "negotiating" || status.role !== "controller" || !peer) return;
     const sessionId = status.sessionId;
-    const dc = peer.createDataChannel(DATA_CHANNEL_LABEL, { ordered: true });
+    const dc = peer.createDataChannel(DATA_CHANNEL_LABEL, {
+      ordered: true,
+      maxRetransmits: 0,
+    });
     setChannel({ type: "set", channel: dc });
 
     void (async () => {
@@ -221,7 +221,6 @@ export function useSession(opts: UseSessionOptions): UseSessionApi {
           sdp: offer,
         });
       } catch (err) {
-        // TEMPORARY: surface WebRTC errors until we add structured error state in Phase 5.
         console.warn("sdp offer failed", err);
       }
     })();
@@ -249,11 +248,17 @@ export function useSession(opts: UseSessionOptions): UseSessionApi {
     }
   }, [status, navigate]);
 
+  // Cleanup remote stream on session end.
+  useEffect(() => {
+    if (status.kind === "ended" || status.kind === "idle") {
+      setRemoteStream({ type: "set", stream: null });
+    }
+  }, [status.kind]);
+
   // ------------------------------------------------------------------
   // Public API
   // ------------------------------------------------------------------
 
-  // Initiates a connection to a remote host identified by PIN.
   const requestConnect = useCallback(
     (targetPin: string) => {
       if (!opts.machineId) return;
@@ -267,20 +272,19 @@ export function useSession(opts: UseSessionOptions): UseSessionApi {
     [opts.machineId, opts.signaling],
   );
 
-  // Sends raw data over the open data channel.
-  const sendMessage = useCallback(
-    (data: string): boolean => {
-      if (!channel || channel.readyState !== "open") return false;
-      channel.send(data);
-      return true;
+  const addVideoTrack = useCallback(
+    (stream: MediaStream) => {
+      if (!peer) return;
+      for (const track of stream.getVideoTracks()) {
+        peer.addTrack(track, stream);
+      }
     },
-    [channel],
+    [peer],
   );
 
-  // Dispatches user_ended to the state machine, triggers navigation to /.
   const endSession = useCallback(() => {
     dispatch({ type: "user_ended" });
   }, []);
 
-  return { status, lastMessage, requestConnect, sendMessage, endSession };
+  return { status, dataChannel: channel, remoteStream, requestConnect, addVideoTrack, endSession };
 }
